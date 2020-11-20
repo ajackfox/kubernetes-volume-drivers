@@ -4,7 +4,7 @@ DIR=$(dirname "$(readlink -f "$0")")
 JQ="/usr/bin/jq"
 BLOBFUSE="blobfuse"
 LOG="/var/log/blobfuse-driver.log"
-VER="1.0.16"
+VER="1.0.17"
 
 usage() {
 	err "Invalid usage. Usage: "
@@ -53,7 +53,7 @@ mount() {
 		err "{\"status\": \"Failure\", \"message\": \"validation failed, error log:container is empty\"}"
 		exit 1
 	fi
-	
+
 	if [ -z "${TMP_PATH}" ]; then
 		TMP_PATH="/mnt/blobfuse$RANDOM/"
 		echo `date` "INFO: tmp-path not specified, use default path: ${TMP_PATH}"  >> $LOG
@@ -84,12 +84,12 @@ mount() {
 		export AZURE_STORAGE_ACCESS_KEY=${ACCOUNTKEY}
 		echo "`date` INF: AZURE_STORAGE_ACCESS_KEY is set " >> $LOG
 	fi
-	
+
 	if [ ! -z "${BLOBENDPOINT}" ]; then
 		export AZURE_STORAGE_BLOB_ENDPOINT=${BLOBENDPOINT}
 		echo "`date` INF: BLOBENDPOINT is set " >> $LOG
 	fi
-	
+
 	if [ ! -z "${ACCOUNTSASTOKEN}" ]; then
 		export AZURE_STORAGE_SAS_TOKEN=${ACCOUNTSASTOKEN}
 		echo "`date` INF: AZURE_STORAGE_SAS_TOKEN is set " >> $LOG
@@ -101,7 +101,7 @@ mount() {
 
 	# mkdir to fix issue: https://github.com/Azure/kubernetes-volume-drivers/issues/58 on blobfuse 1.2.3
 	mkdir -p ${TMP_PATH}
-	
+
 	#mounting
 	echo "`date` EXEC: ${BLOBFUSE} ${MNTPATH} --container-name=${CONTAINER} --tmp-path=${TMP_PATH} -o allow_other ${read_only_param} ${MOUNT_OPTIONS}" >>$LOG
 	${BLOBFUSE} ${MNTPATH} --container-name=${CONTAINER} --tmp-path=${TMP_PATH} -o allow_other ${read_only_param} ${MOUNT_OPTIONS}
@@ -141,9 +141,12 @@ unmount() {
 
 	echo "`date` EXEC: rmdir ${MNTPATH}" >> $LOG
 	rmdir "${MNTPATH}" >> $LOG 2>&1
-	if [ "$?" != "0" ]; then
-		echo "`date` EXEC: rm -r --one-file-system ${MNTPATH}" >> $LOG
-		rm -r --one-file-system "${MNTPATH}" >> $LOG 2>&1
+	if [ -d "${MNTPATH}" ]; then
+		for dir in $(find ${MNTPATH} -type d | tac)
+		do
+			echo "EXEC: rmdir $dir" >> $LOG 2>&1
+			rmdir $dir
+		done
 	fi
 
 	log '{"status": "Success"}'
